@@ -64,6 +64,133 @@ void delay(uint16_t us)
 	__HAL_TIM_SET_COUNTER(&htim6,0);  // set the counter value a 0
 	while (__HAL_TIM_GET_COUNTER(&htim6) < us);  // wait for the counter to reach the us input in the parameter
 }
+uint8_t rxBuffer = 0;
+GPIO_InitTypeDef gpioInitTypeDef;
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
+	if (huart->Instance == USART2 && rxBuffer == 0xAA) {
+		// Set Gpio to output
+		gpioInitTypeDef.Pin = GPIO_PIN_1;
+		gpioInitTypeDef.Mode = GPIO_MODE_OUTPUT_PP;
+		gpioInitTypeDef.Pull = GPIO_NOPULL;
+		gpioInitTypeDef.Speed = GPIO_SPEED_FREQ_LOW;
+		HAL_GPIO_Init(GPIOA, &gpioInitTypeDef);
+		// Send start signal to dht11
+		// Set low for 18ms
+		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, GPIO_PIN_RESET);
+		delay(18000);
+
+		// Set pin to input
+		gpioInitTypeDef.Mode = GPIO_MODE_INPUT;
+		HAL_GPIO_Init(GPIOA, &gpioInitTypeDef);
+
+		// Check reponse
+		uint8_t res = 0;
+		delay(40);
+		if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1) == GPIO_PIN_RESET) {
+			delay(80);
+			if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1) == GPIO_PIN_SET)
+				res = 1;
+			else
+				res = -1;
+		}
+		while (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1)) {
+			// wait till dht11 reponse end
+		}
+
+		// Recevie data from dht11
+		uint8_t rh1 = 0;
+		for (int i = 0; i < 8; i++) {
+			while (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1) == GPIO_PIN_RESET) {
+				// Wait until the 50us before data transmit
+			}
+			// Now dht11 is sending data
+			delay(40);
+			if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1) == GPIO_PIN_SET) // 26-28us is 0, 70us is 1
+					{
+				rh1 |= (1 << (7 - i)); // 1
+				while (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1) == GPIO_PIN_SET) {
+					// Wait until 70us high signal pass
+				}
+			}
+		}
+		// RH2
+		uint8_t rh2 = 0;
+		for (int i = 0; i < 8; i++) {
+			while (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1) == GPIO_PIN_RESET) {
+				// Wait until the 50us before data transmit
+			}
+			// Now dht11 is sending data
+			delay(40);
+			if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1) == GPIO_PIN_SET) // 26-28us is 0, 70us is 1
+					{
+				rh2 |= (1 << (7 - i)); // 1
+				while (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1) == GPIO_PIN_SET) {
+					// Wait until 70us high signal pass
+				}
+			}
+		}
+		// T1
+		uint8_t t1 = 0;
+		for (int i = 0; i < 8; i++) {
+			while (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1) == GPIO_PIN_RESET) {
+				// Wait until the 50us before data transmit
+			}
+			// Now dht11 is sending data
+			delay(40);
+			if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1) == GPIO_PIN_SET) // 26-28us is 0, 70us is 1
+					{
+				t1 |= (1 << (7 - i)); // 1
+				while (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1) == GPIO_PIN_SET) {
+					// Wait until 70us high signal pass
+				}
+			}
+		}
+		// T2
+		uint8_t t2 = 0;
+		for (int i = 0; i < 8; i++) {
+			while (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1) == GPIO_PIN_RESET) {
+				// Wait until the 50us before data transmit
+			}
+			// Now dht11 is sending data
+			delay(40);
+			if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1) == GPIO_PIN_SET) // 26-28us is 0, 70us is 1
+					{
+				t2 |= (1 << (7 - i)); // 1
+				while (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1) == GPIO_PIN_SET) {
+					// Wait until 70us high signal pass
+				}
+			}
+		}
+		// Checksum
+		uint8_t chksum = 0;
+		for (int i = 0; i < 8; i++) {
+			while (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1) == GPIO_PIN_RESET) {
+				// Wait until the 50us before data transmit
+			}
+			// Now dht11 is sending data
+			delay(40);
+			if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1) == GPIO_PIN_SET) // 26-28us is 0, 70us is 1
+					{
+				chksum |= (1 << (7 - i)); // 1
+				while (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1) == GPIO_PIN_SET) {
+					// Wait until 70us high signal pass
+				}
+			}
+		}
+
+		const uint8_t DATA_LENGTH = 4;
+		uint8_t buffer[DATA_LENGTH];
+		buffer[0] = t1;
+		buffer[1] = rh1;
+		buffer[2] = t1 + rh1; // chksum = t1 + rh1
+		buffer[3] = 0xAA; // delimiter
+
+		//sprintf(temp, "%u", t1);
+		//HAL_UART_Transmit(&huart2, (uint8_t*) temp, strlen(temp), HAL_MAX_DELAY);
+		HAL_UART_Transmit(&huart2, buffer, DATA_LENGTH, HAL_MAX_DELAY);
+	}
+	HAL_UART_Receive_IT(&huart2, &rxBuffer, sizeof(rxBuffer));
+}
 
 /* USER CODE END 0 */
 
@@ -100,150 +227,25 @@ int main(void)
   MX_USART2_UART_Init();
   MX_TIM6_Init();
   /* USER CODE BEGIN 2 */
-  GPIO_InitTypeDef gpioInitTypeDef;
   HAL_TIM_Base_Start(&htim6);
+
+  HAL_UART_Receive_IT(&huart2, &rxBuffer, sizeof(rxBuffer)); // Start reception once
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+	HAL_GPIO_WritePin(GPIOA, LD2_Pin, GPIO_PIN_SET);
+	__WFI();
 
-	// Set Gpio to output
-	gpioInitTypeDef.Pin = GPIO_PIN_1;
-	gpioInitTypeDef.Mode = GPIO_MODE_OUTPUT_PP;
-	gpioInitTypeDef.Pull = GPIO_NOPULL;
-	gpioInitTypeDef.Speed = GPIO_SPEED_FREQ_LOW;
-	HAL_GPIO_Init(GPIOA, &gpioInitTypeDef);
-	// Send start signal to dht11
-	// Set low for 18ms
-	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, GPIO_PIN_RESET);
-	delay(18000);
 
-	// Set pin to input
-	gpioInitTypeDef.Mode = GPIO_MODE_INPUT;
-	HAL_GPIO_Init(GPIOA, &gpioInitTypeDef);
-
-	// Check reponse
-	uint8_t res = 0;
-	delay(40);
-	if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1) == GPIO_PIN_RESET)
-	{
-		delay(80);
-		if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1) == GPIO_PIN_SET)
-			res = 1;
-		else
-			res = -1;
-	}
-	while (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1))
-	{
-		// wait till dht11 reponse end
-	}
-
-	// Recevie data from dht11
-	uint8_t rh1 = 0;
-	for (int i = 0; i < 8; i++)
-	{
-		while (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1) == GPIO_PIN_RESET)
-		{
-			// Wait until the 50us before data transmit
-		}
-		// Now dht11 is sending data
-		delay(40);
-		if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1) == GPIO_PIN_SET) // 26-28us is 0, 70us is 1
-		{
-			rh1 |= (1 << (7 - i)); // 1
-			while (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1) == GPIO_PIN_SET)
-			{
-				// Wait until 70us high signal pass
-			}
-		}
-	}
-	// RH2
-	uint8_t rh2 = 0;
-	for (int i = 0; i < 8; i++)
-	{
-		while (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1) == GPIO_PIN_RESET)
-		{
-			// Wait until the 50us before data transmit
-		}
-		// Now dht11 is sending data
-		delay(40);
-		if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1) == GPIO_PIN_SET) // 26-28us is 0, 70us is 1
-		{
-			rh2 |= (1 << (7 - i)); // 1
-			while (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1) == GPIO_PIN_SET)
-			{
-				// Wait until 70us high signal pass
-			}
-		}
-	}
-	// T1
-	uint8_t t1 = 0;
-	for (int i = 0; i < 8; i++)
-	{
-		while (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1) == GPIO_PIN_RESET)
-		{
-			// Wait until the 50us before data transmit
-		}
-		// Now dht11 is sending data
-		delay(40);
-		if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1) == GPIO_PIN_SET) // 26-28us is 0, 70us is 1
-		{
-			t1 |= (1 << (7 - i)); // 1
-			while (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1) == GPIO_PIN_SET)
-			{
-				// Wait until 70us high signal pass
-			}
-		}
-	}
-	// T2
-	uint8_t t2 = 0;
-	for (int i = 0; i < 8; i++)
-	{
-		while (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1) == GPIO_PIN_RESET)
-		{
-			// Wait until the 50us before data transmit
-		}
-		// Now dht11 is sending data
-		delay(40);
-		if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1) == GPIO_PIN_SET) // 26-28us is 0, 70us is 1
-		{
-			t2 |= (1 << (7 - i)); // 1
-			while (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1) == GPIO_PIN_SET)
-			{
-				// Wait until 70us high signal pass
-			}
-		}
-	}
-	// Checksum
-	uint8_t chksum = 0;
-	for (int i = 0; i < 8; i++)
-	{
-		while (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1) == GPIO_PIN_RESET)
-		{
-			// Wait until the 50us before data transmit
-		}
-		// Now dht11 is sending data
-		delay(40);
-		if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1) == GPIO_PIN_SET) // 26-28us is 0, 70us is 1
-		{
-			chksum |= (1 << (7 - i)); // 1
-			while (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1) == GPIO_PIN_SET)
-			{
-				// Wait until 70us high signal pass
-			}
-		}
-	}
-
-	//if (chksum == )
-	float temp = (float)((t1 << 8) + t2)/(float)10.0;
-	//printf("%.2f", (float)t1);
-	//HAL_TIM_Base_Stop(&htim6);
-	HAL_Delay(3000);
+	//HAL_Delay(3000);
 
 
 
@@ -275,7 +277,7 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.PLL.PLLM = 4;
   RCC_OscInitStruct.PLL.PLLN = 50;
   RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
-  RCC_OscInitStruct.PLL.PLLQ = 2;
+  RCC_OscInitStruct.PLL.PLLQ = 3;
   RCC_OscInitStruct.PLL.PLLR = 2;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
@@ -351,7 +353,7 @@ static void MX_USART2_UART_Init(void)
 
   /* USER CODE END USART2_Init 1 */
   huart2.Instance = USART2;
-  huart2.Init.BaudRate = 115200;
+  huart2.Init.BaudRate = 9600;
   huart2.Init.WordLength = UART_WORDLENGTH_8B;
   huart2.Init.StopBits = UART_STOPBITS_1;
   huart2.Init.Parity = UART_PARITY_NONE;
