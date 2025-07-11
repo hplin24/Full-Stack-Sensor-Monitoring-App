@@ -1,48 +1,37 @@
+#include "DHT11Reader.h"
+#include "Logger.h"
 #include <iostream>
 #include <Windows.h>
 
-const std::wstring STLINK_COM_PORT = L"\\\\.\\COM3";
-
 int main()
 {
-	HANDLE hCom;
-	hCom = CreateFile(STLINK_COM_PORT.c_str(), GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-	if (hCom == INVALID_HANDLE_VALUE)
+	utils::Logger logger(L"main");
+	DHT11Reader dht11;
+
+	if (!dht11.IsComPortOk())
 	{
-		std::cout << "hCom init failed";
-		return 0;
-	}
-
-	DCB dcb;
-	//  Initialize the DCB structure.
-	SecureZeroMemory(&dcb, sizeof(DCB));
-	dcb.DCBlength = sizeof(DCB);
-
-	if (!GetCommState(hCom, &dcb))
-	{
-		//  Handle the error.
-		std::cout << "GetCommState failed with error: " << GetLastError() << std::endl;
-		return 0;
-	}
-
-	dcb.BaudRate = CBR_9600;     //  baud rate
-	dcb.ByteSize = 8;             //  data size, xmit and rcv
-	dcb.Parity = NOPARITY;      //  parity bit
-	dcb.StopBits = ONESTOPBIT;    //  stop bit
-
-	if (!SetCommState(hCom, &dcb))
-	{
-		//  Handle the error.
-		std::cout << "SetCommState failed with error: " << GetLastError() << std::endl;
-		return 0;
+		logger.Log(L"dht11 com port is not ok");
+		return -1;
 	}
 
 	while (1)
 	{
-		std::string str(10, 0);
-		std::cout << "readfile: " << ReadFile(hCom, &str[0], 2, NULL, NULL) << std::endl;
-		std::cout << str << std::endl;
+		DHT11Data dht11Data;
+		dht11Data.temp = 0;
+		dht11Data.rh = 0;
+
+		if (!dht11.RetrieveData(dht11Data))
+		{
+			logger.Log(L"retrieve data failed");
+			return -1;
+		}
+
+		logger.Log(L"from main: temp=" +
+			std::to_wstring(dht11Data.temp) + L", rh=" + std::to_wstring(dht11Data.rh));
+
+		Sleep(10000);
 	}
+
 
 	return 0;
 }
