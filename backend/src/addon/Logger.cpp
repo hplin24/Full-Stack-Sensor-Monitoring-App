@@ -1,7 +1,7 @@
 #include "Logger.h"
 #include <codecvt>
 
-Logger::Logger(const std::wstring& id) : m_wsLogPath(GetAppPath() + L"_" + id + L".txt")
+Logger::Logger(const std::wstring& id) : m_wsLogPath(L"C:\\Users\\Matrix\\Documents\\log.txt") //(GetAppPath() + L"_" + id + L".txt")
 {
     m_hFile = CreateFileW(
         m_wsLogPath.c_str(),
@@ -13,7 +13,10 @@ Logger::Logger(const std::wstring& id) : m_wsLogPath(GetAppPath() + L"_" + id + 
         NULL);
 
     if (m_hFile)
+    {
+        Log(L"Log path: " + GetAppPath() + L"_" + id + L".txt");
         LogHeader();
+    }
 }
 
 Logger::~Logger()

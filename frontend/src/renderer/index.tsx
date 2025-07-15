@@ -12,14 +12,3 @@ root.render(<App />);
 // });
 
 // window.electron?.ipcRenderer.sendMessage('ipc-example', ['ping']);
-
-// stm32
-window.electron?.ipcRenderer.on('ipc-example', (response) => {
-  // eslint-disable-next-line no-console
-  const data = response as { temp: number; rh: number };
-  console.log(data.temp);
-  console.log(data.rh);
-});
-// window.electron?.ipcRenderer.sendMessage('ipc-example');
-
-//window.electron?.ipcRenderer.sendMessage('ipc-example', 'dht11');

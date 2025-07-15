@@ -8,10 +8,10 @@
 enum class ErrorCode
 {
 	None = 0,
-	OpenComportFailed,
+	OpenComPortFailed,
 	GetCommStateFailed,
 	SetCommStateFailed,
-	ComportNotInitialized,
+	ComPortNotInitialized,
 	WriteToStm32Failed,
 	ReadFromStm32Failed,
 	IncorrectBufferFormat,
@@ -35,11 +35,10 @@ public:
 	DHT11Reader(const DHT11Reader&) = delete;
 	DHT11Reader& operator=(const DHT11Reader&) = delete;
     
-	ErrorCode InitComPort();
-	bool IsComPortOk() const;
-
-	ErrorCode ReInitComPort();
-	ErrorCode RetrieveData(DHT11Data& data);
+	ErrorCode Init();
+	bool IsInit() const;
+	ErrorCode ReInit();
+	ErrorCode GetData(DHT11Data& data);
 
 private:
 	HANDLE m_hCom;

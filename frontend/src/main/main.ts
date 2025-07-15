@@ -15,6 +15,7 @@ import log from 'electron-log';
 import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
 import axios from 'axios';
+import { ApiResponse } from "../../../types/api-response";
 
 class AppUpdater {
   constructor() {
@@ -32,30 +33,38 @@ let mainWindow: BrowserWindow | null = null;
 //   event.reply('ipc-example', msgTemplate('pong'));
 // });
 
+const api_server = axios.create({
+  baseURL: process.env.API_BASE_URL || 'http://localhost:3000', // fallback for dev
+});
+
 ipcMain.on('ipc-example', async (event, arg) => {
-
-  let dht11Data: { temp: number; rh: number; } = { temp: 0, rh: 0 };
-
+  let apiRes: ApiResponse = { success: false, err: 0, message: '' };
   try {
-    let res = await axios.get('/api/iscomportok');
-    if (res.data === false) {
-      res = await axios.get('/api/initcomport');
-      if (res.data != 9) {
-        event.reply('ipc-example-reply', { error: 'init com port failed' });
-      }
-      else {
-        res = await axios.get('/api/getdata');
-        dht11Data.temp = res.data.temp;
-        dht11Data.rh = res.data.rh;
+    console.log('[electron:main:ipcMain] checking isinit');
+    let res = await api_server.get('/api/isinit');
+    apiRes = res.data;
+    if (!apiRes.success) {
+      console.log('[electron:main:ipcMain] isinit return false');
+      // Initialize the addon
+      res = await api_server.get('/api/initialize');
+      apiRes = res.data;
+      if (!apiRes.success) {
+        console.log(apiRes.message);
+        event.reply('ipc-example', apiRes);
       }
     }
-  }
-  catch (err) {
+
+    // Get data from addon
+    console.log('[electron:main:ipcMain] getting data');
+    res = await api_server.get('/api/getdata');
+    apiRes = res.data;
+
+  } catch (err) {
     console.error('Request error:', err);
     event.reply('ipc-example-reply', { error: 'Something went wrong' });
   }
 
-  event.reply('ipc-example', dht11Data);
+  event.reply('ipc-example', apiRes);
 });
 
 if (process.env.NODE_ENV === 'production') {
@@ -98,11 +107,12 @@ const createWindow = async () => {
 
   mainWindow = new BrowserWindow({
     show: false,
-    width: 1024,
-    height: 728,
+    width: 250, // 1024
+    height: 250, // 728
     icon: getAssetPath('icon.png'),
-    // frame: false,
-    // transparent: true,
+    frame: false,
+    transparent: true,
+    resizable: false,
     webPreferences: {
       preload: app.isPackaged
         ? path.join(__dirname, 'preload.js')
