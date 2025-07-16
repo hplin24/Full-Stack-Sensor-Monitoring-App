@@ -34,7 +34,7 @@ public:
 	~DHT11Reader();
 	DHT11Reader(const DHT11Reader&) = delete;
 	DHT11Reader& operator=(const DHT11Reader&) = delete;
-    
+     
 	ErrorCode Init();
 	bool IsInit() const;
 	ErrorCode ReInit();

@@ -3,7 +3,10 @@
 
 namespace
 {
+	// TODO:
+	// Use win32 to get the STLink virtual com port number
 	const std::wstring TRANSMIT_COM_PORT = L"\\\\.\\COM3";
+	//
 	const DWORD TRANSMIT_BAUD_RATE = CBR_9600;
 	const size_t RECV_DATA_SIZE = 4; // [ temp, rh, chksum, delimiter ]
 	const unsigned char REQ_SIGNAL = 0xAA;
