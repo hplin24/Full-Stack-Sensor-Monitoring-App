@@ -22,7 +22,6 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "dht11.h"
-#include <string.h> // memset
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -61,26 +60,36 @@ static void MX_TIM6_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-// Buffer receives from the PC end
+// Data received from the UART
 uint8_t rxBuffer = 0;
 
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
-	if (huart->Instance == USART2 && rxBuffer == 0xAA) {
-		DHT11Obj dht11Obj;
-		InitDHT11Obj(&dht11Obj, GPIOA, GPIO_PIN_1, &htim6);
-		ReadDHT11(&dht11Obj);
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+	if (huart->Instance == USART2 && rxBuffer == 0xAA)
+	{
+		// Init the Dht11 config
+		Dht11Cfg cfg;
+		cfg.port = GPIOA;
+		cfg.pin = GPIO_PIN_1;
+		cfg.htim = &htim6;
+		Dht11Data data;
 
-		const uint8_t DATA_LENGTH = 3;
-		uint8_t buffer[DATA_LENGTH];
-		memset(&buffer, 0, DATA_LENGTH);
-		buffer[0] = dht11Obj.temp;
-		buffer[1] = dht11Obj.humidity;
-		buffer[2] = dht11Obj.chksum;
+		ReadDht11(&cfg, &data);
 
+		uint8_t buffer[DHT11_DATA_SIZE];
+		for (int i = 0; i < DHT11_DATA_SIZE; i++)
+			buffer[i] = 0;
 
-		HAL_UART_Transmit(&huart2, buffer, DATA_LENGTH, HAL_MAX_DELAY);
+		buffer[0] = data.rh_int;
+		buffer[1] = data.rh_frac;
+		buffer[2] = data.temp_int;
+		buffer[3] = data.temp_frac;
+		buffer[4] = data.checksum;
+
+		// Send the data to the PC
+		HAL_UART_Transmit(&huart2, buffer, DHT11_DATA_SIZE, HAL_MAX_DELAY);
 	}
-
+	// Set up UART receive operation for the next incoming data
 	HAL_UART_Receive_IT(&huart2, &rxBuffer, sizeof(rxBuffer));
 }
 

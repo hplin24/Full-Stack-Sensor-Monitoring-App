@@ -1,146 +1,91 @@
 #include "dht11.h"
 
-void DelayUntil(TIM_HandleTypeDef* htim, uint16_t us)
+void DelayMicroseconds(TIM_HandleTypeDef* htim, uint16_t milliseconds)
 {
 	__HAL_TIM_SET_COUNTER(htim, 0);
-	while (__HAL_TIM_GET_COUNTER(htim) < us);
+	while (__HAL_TIM_GET_COUNTER(htim) < milliseconds);
 }
 
-void InitDHT11Obj(DHT11Obj* dht11Obj, GPIO_TypeDef* port, uint16_t pin, TIM_HandleTypeDef* htim)
-{
-	dht11Obj->port = port;
-	dht11Obj->pin = pin;
-	dht11Obj->htim = htim;
-	dht11Obj->temp = 0;
-	dht11Obj->humidity = 0;
-	dht11Obj->chksum = 0;
-}
-
-void SetDHT11GPIOToInputMode(DHT11Obj* dht11Obj)
+void SetDht11GPIOMode(Dht11Cfg* cfg, Dht11GPIOMode mode)
 {
 	GPIO_InitTypeDef gpioInitTypeDef = { 0 };
-	gpioInitTypeDef.Pin = dht11Obj->pin;
-	gpioInitTypeDef.Mode = GPIO_MODE_INPUT;
+	gpioInitTypeDef.Pin = cfg->pin;
 	gpioInitTypeDef.Pull = GPIO_NOPULL;
+	gpioInitTypeDef.Mode = (mode == DHT11_GPIO_INPUT) ? GPIO_MODE_INPUT : DHT11_GPIO_OUTPUT;
 	gpioInitTypeDef.Speed = GPIO_SPEED_FREQ_LOW;
-	HAL_GPIO_Init(dht11Obj->port, &gpioInitTypeDef);
+
+	HAL_GPIO_Init(cfg->port, &gpioInitTypeDef);
 }
 
-void SetDHT11GPIOToOutputMode(DHT11Obj* dht11Obj)
+void ReadDht11(Dht11Cfg* cfg, Dht11Data* outData)
 {
-	GPIO_InitTypeDef gpioInitTypeDef = { 0 };
-	gpioInitTypeDef.Pin = dht11Obj->pin;
-	gpioInitTypeDef.Mode = GPIO_MODE_OUTPUT_PP;
-	gpioInitTypeDef.Pull = GPIO_NOPULL;
-	gpioInitTypeDef.Speed = GPIO_SPEED_FREQ_LOW;
-	HAL_GPIO_Init(dht11Obj->port, &gpioInitTypeDef);
-}
+	SetDht11GPIOMode(cfg, DHT11_GPIO_OUTPUT);
 
-void ReadDHT11(DHT11Obj* dht11Obj)
-{
-	SetDHT11GPIOToOutputMode(dht11Obj);
-
-	// MCU Sends out Start Signal (low-voltage-level) to DHT
+	// Start signal. MCU->DHT. Pull data line low for at least 18ms
 	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, GPIO_PIN_RESET);
-	DelayUntil(dht11Obj->htim, 18000);
+	DelayMicroseconds(cfg->htim, 18000);
 
-	SetDHT11GPIOToInputMode(dht11Obj);
+	// MCU releases line when mode changes
+	SetDht11GPIOMode(cfg, DHT11_GPIO_INPUT);
 
-	// MCU pulls up voltage and wait 20-40us for DHT's response
-	DelayUntil(dht11Obj->htim, 40);
-	if (HAL_GPIO_ReadPin(dht11Obj->port, dht11Obj->pin) == GPIO_PIN_RESET) {
-		// DHT detects the start signal then send out a low-voltage-level response signal, which lasts 80us.
-		DelayUntil(dht11Obj->htim, 80);
+	// Prepare to read. MCU->DHT. Release line, wait 20–40us
+	DelayMicroseconds(cfg->htim, 40);
+
+	// Sensor presence response. DHT->MCU. Responds with 80us low + 80us high
+	if (HAL_GPIO_ReadPin(cfg->port, cfg->pin) == GPIO_PIN_RESET)
+	{
+		// 80us low
+		DelayMicroseconds(cfg->htim, 80);
 	}
-	while (HAL_GPIO_ReadPin(dht11Obj->port, dht11Obj->pin)) {
-		// Wait until DHT sends out high-voltage-level and keeps it for 80us
+	while (HAL_GPIO_ReadPin(cfg->port, cfg->pin))
+	{
+		// 80us high
 	}
 
-	// DHT sends out data
+	// DHT->MCU. Sends 40 bits of data (humidity + temp + checksum)
+	// 26-28us high means bit '0'
+	// 70us high means bit '1'
+	// Wait 50us, if it is still high, it is a bit '1', otherwise, bit '0'
 
-	// Humidity integral
-	uint8_t humidityInt = 0;
-	for (int i = 0; i < 8; i++) {
-		while (HAL_GPIO_ReadPin(dht11Obj->port, dht11Obj->pin) == GPIO_PIN_RESET) {
-			// Wait until the 50us before data transmit
+	uint8_t rh_int = 0;
+	uint8_t rh_frac = 0;
+	uint8_t temp_int = 0;
+	uint8_t temp_frac = 0;
+	uint8_t checksum = 0;
+	for (int i = 0; i < 40; i++)
+	{
+		while (HAL_GPIO_ReadPin(cfg->port, cfg->pin) == GPIO_PIN_RESET)
+		{
+			// Wait 50us in low for the start of bit
 		}
-		// Now DGT is sending data
-		DelayUntil(dht11Obj->htim, 40);
-		if (HAL_GPIO_ReadPin(dht11Obj->port, dht11Obj->pin) == GPIO_PIN_SET) {
-			// 26-28us is 0, 70us is 1
-			humidityInt |= (1 << (7 - i)); // 1
-			while (HAL_GPIO_ReadPin(dht11Obj->port, dht11Obj->pin) == GPIO_PIN_SET) {
-				// Wait until 70us high signal pass
+		// Wait 50us to know whether it is a bit '1' or '0'
+		DelayMicroseconds(cfg->htim, 50);
+		if (HAL_GPIO_ReadPin(cfg->port, cfg->pin) == GPIO_PIN_SET)
+		{
+			// It is a bit '1'
+
+			// index 0-7   is Integral humidity
+			// index 8-15  is Decimal  humidity
+			// index 16-23 is Integral temperature
+			// index 24-31 is Decimal  temperature
+			// index 32-40 is checksum (sum of bytes above)
+
+			if      (i >= 0 && i < 8)   rh_int    |= (1 << (7 - i));
+			else if (i >= 8 && i < 16)  rh_frac   |= (1 << (7 - (i - 8)));
+			else if (i >= 16 && i < 24) temp_int  |= (1 << (7 - (i - 16)));
+			else if (i >= 24 && i < 32) temp_frac |= (1 << (7 - (i - 24)));
+			else if (i >= 32 && i < 40) checksum  |= (1 << (7 - (i - 32)));
+
+			while (HAL_GPIO_ReadPin(cfg->port, cfg->pin) == GPIO_PIN_SET)
+			{
+				// Wait until the bit transmission ends
 			}
 		}
 	}
 
-	// Humidity decimal
-	uint8_t humidityDec = 0;
-	for (int i = 0; i < 8; i++) {
-		while (HAL_GPIO_ReadPin(dht11Obj->port, dht11Obj->pin) == GPIO_PIN_RESET) {
-			// Wait until the 50us before data transmit
-		}
-		// Now dht11 is sending data
-		DelayUntil(dht11Obj->htim, 40);
-		if (HAL_GPIO_ReadPin(dht11Obj->port, dht11Obj->pin) == GPIO_PIN_SET) {
-			// 26-28us is 0, 70us is 1
-			humidityDec |= (1 << (7 - i)); // 1
-			while (HAL_GPIO_ReadPin(dht11Obj->port, dht11Obj->pin) == GPIO_PIN_SET) {
-				// Wait until 70us high signal pass
-			}
-		}
-	}
-	// Temperature integral
-	uint8_t temperatureInt = 0;
-	for (int i = 0; i < 8; i++) {
-		while (HAL_GPIO_ReadPin(dht11Obj->port, dht11Obj->pin) == GPIO_PIN_RESET) {
-			// Wait until the 50us before data transmit
-		}
-		// Now dht11 is sending data
-		DelayUntil(dht11Obj->htim, 40);
-		if (HAL_GPIO_ReadPin(dht11Obj->port, dht11Obj->pin) == GPIO_PIN_SET) {
-			// 26-28us is 0, 70us is 1
-			temperatureInt |= (1 << (7 - i)); // 1
-			while (HAL_GPIO_ReadPin(dht11Obj->port, dht11Obj->pin) == GPIO_PIN_SET) {
-				// Wait until 70us high signal pass
-			}
-		}
-	}
-	// Temperature decimal
-	uint8_t temperatureDec = 0;
-	for (int i = 0; i < 8; i++) {
-		while (HAL_GPIO_ReadPin(dht11Obj->port, dht11Obj->pin) == GPIO_PIN_RESET) {
-			// Wait until the 50us before data transmit
-		}
-		// Now dht11 is sending data
-		DelayUntil(dht11Obj->htim, 40);
-		if (HAL_GPIO_ReadPin(dht11Obj->port, dht11Obj->pin) == GPIO_PIN_SET) {
-			// 26-28us is 0, 70us is 1
-			temperatureDec |= (1 << (7 - i)); // 1
-			while (HAL_GPIO_ReadPin(dht11Obj->port, dht11Obj->pin) == GPIO_PIN_SET) {
-				// Wait until 70us high signal pass
-			}
-		}
-	}
-	// Checksum
-	uint8_t chksum = 0;
-	for (int i = 0; i < 8; i++) {
-		while (HAL_GPIO_ReadPin(dht11Obj->port, dht11Obj->pin) == GPIO_PIN_RESET) {
-			// Wait until the 50us before data transmit
-		}
-		// Now dht11 is sending data
-		DelayUntil(dht11Obj->htim, 40);
-		if (HAL_GPIO_ReadPin(dht11Obj->port, dht11Obj->pin) == GPIO_PIN_SET) {
-			// 26-28us is 0, 70us is 1
-			chksum |= (1 << (7 - i)); // 1
-			while (HAL_GPIO_ReadPin(dht11Obj->port, dht11Obj->pin) == GPIO_PIN_SET) {
-				// Wait until 70us high signal pass
-			}
-		}
-	}
-
-	dht11Obj->temp = temperatureInt;
-	dht11Obj->humidity = humidityInt;
-	dht11Obj->chksum = temperatureInt + humidityInt;
+	outData->rh_int = rh_int;
+	outData->rh_frac = rh_frac;
+	outData->temp_int = temp_int;
+	outData->temp_frac = temp_frac;
+	outData->checksum = checksum;
 }
