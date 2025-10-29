@@ -1,36 +1,29 @@
-# Full-Stack Embedded Sensor Monitoring System
+# Full-Stack Sensor Monitoring App
 
 ### Introduction
 
-**Full-Stack Embedded Sensor Monitoring System** is an end-to-end system that integrates an STM32 microcontroller (NUCLEO-F446RE) with a modern Node.js-based application stack. It allows users to monitor temperature and humidity data from a DHT11 sensor using a simple desktop widget.
+**Full-Stack Sensor Monitoring App** integrates an STM32 board (NUCLEO-F446RE) with a Node.js-based application. It allows users to monitor temperature and humidity data from a DHT11 sensor using a desktop widget.
+
+<table>
+  <tr>
+    <td><img src="images/board_topview.png" alt="Image 1" width="340"/></td>
+    <td><img src="images/widget.png" alt="Image 2" width="300"/></td>
+  </tr>
+</table>
 
 This project includes:
 
 - Embedded C firmware for STM32 NUCLEO-F446RE (using HAL and STM32CubeIDE)
-- Windows C++ communication module (Win32 API)
-- Node.js native addon (C++ bindings)
-- RESTful backend server using Express.js
-- Electron + React.js frontend desktop widget
-
----
-
-### Features
-
-- 🔌 Temperature and humidity monitoring via DHT11 sensor
-- 💠 Firmware communication over UART using ST-Link VCP
-- 🔄 Native C++ to JavaScript bridging via Node.js addon
-- 🌐 RESTful API for hardware interaction
-- 💻 Electron-based desktop UI using React
-
----
+- Communication module (C++, Win32 API)
+- Node.js native addon (C++)
+- Backend server (Typescript, Express.js)
+- Electron + React.js frontend
 
 ### Architecture
 
 ```
-DHT11 Sensor --> STM32 (UART) --> C++ Communication Module --> Node.js Addon --> Express API --> Electron/React UI
+DHT11 Sensor --> STM32 board --(Windows)--> Communication Module --> Node.js Addon --> Express backend --> Electron/React frontend
 ```
-
----
 
 ### Project Structure
 
@@ -39,7 +32,7 @@ DHT11 Sensor --> STM32 (UART) --> C++ Communication Module --> Node.js Addon -->
 ├── firmware/           # Embedded C code for STM32 NUCLEO-F446RE
 │   └── dht11/
 ├── app/
-│   ├── backend/        # Express.js REST API
+│   ├── backend/        # Express.js server API
 │   ├── frontend/       # React + Electron desktop app
 │   └── shared/         # Shared types used by both frontend and backend
 ├── images/             # README images
@@ -50,11 +43,11 @@ DHT11 Sensor --> STM32 (UART) --> C++ Communication Module --> Node.js Addon -->
 
 ### Getting Started
 
-> ⚠️ Prerequisites: STM32 NUCLEO-F446RE board, DHT11 sensor, Windows PC, Node.js (v22+), C++ build tools
+> Prerequisites: STM32 NUCLEO-F446RE board, DHT11 sensor, Windows PC, Node.js (v22+), C++ build tools
 
 #### 1. Flash Firmware
 
-Use STM32CubeIDE to build and flash the firmware located in `/firmware/dht11/` to the NUCLEO board.
+Use STM32CubeIDE to build and flash the firmware located in `/firmware/dht11/` to the NUCLEO-F446RE board.
 
 #### 2. Build and Start Backend Server
 
@@ -74,28 +67,13 @@ npm install
 npm start
 ```
 
----
-
-### Demo
-
-<table>
-  <tr>
-    <td><img src="images/board_topview.png" alt="Image 1" width="340"/></td>
-    <td><img src="images/widget.png" alt="Image 2" width="300"/></td>
-  </tr>
-</table>
-
----
-
 ### Tech Stack
 
-- STM32 (HAL, C)
-- C++ (Win32 API)
-- Node.js + Custom addon
-- Express.js
-- React.js + Electron
-
----
+- STM32 firmware (C, HAL)
+- C++, Win32 API
+- Node.js + custom addon
+- Typescript, Express.js
+- React.js, Electron
 
 ### License
 
